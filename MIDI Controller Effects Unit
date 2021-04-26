@@ -1,0 +1,108 @@
+from microbit import *
+import math
+
+def midiNoteOn(chan, n, vel): #set up MIDI note on for button pressed
+    MIDI_NOTE_ON = 0x90
+    if chan > 15:
+        return
+    if n > 127:
+        return
+    if vel > 127:
+        return
+    msg = bytes([MIDI_NOTE_ON | chan, n, vel])
+    uart.write(msg)
+
+def midiNoteOff(chan, n, vel): #set up MIDI note off for button released and default values
+    MIDI_NOTE_OFF = 0x80
+    if chan > 15:
+        return
+    if n > 127:
+        return
+    if vel > 127:
+        return
+    msg = bytes([MIDI_NOTE_OFF | chan, n, vel])
+    uart.write(msg)
+
+def midiControlChange(chan, n, value): #set up MIDI control parameters to allow x and y axis to be registered
+    MIDI_CC = 0xB0
+    if chan > 15:
+        return
+    if n > 127:
+        return
+    if value > 127:
+        return
+    msg = bytes([MIDI_CC | chan, n, value])
+    uart.write(msg)
+
+def Start():
+    uart.init(baudrate=31250, bits=8, parity=None, stop=1, tx=pin0)
+
+Start()
+lastA = False
+lastB = False
+lastC = False
+lastD = False
+BUTTON_A_NOTE = 1 #set MIDI note values for each button
+BUTTON_B_NOTE = 2
+BUTTON_C_NOTE = 3
+BUTTON_D_NOTE = 4
+last_tilt = 0
+while True:
+    a = button_a.is_pressed() #button a on micro:bit pushed
+    b = button_b.is_pressed() #button b on micro:bit pushed
+    c = pin1.is_touched() #connected button has sent a signal to pin 1 on micro:bit
+    d = pin2.is_touched() #connected button has sent a signal to pin 2 on micro:bit
+    if a is True and lastA is False: #when button a is pressed, sends MIDI note 1 to PD
+        display.show("+1") #shows user that they have cycled up through one effect via the LED display
+        midiNoteOn(0, BUTTON_A_NOTE, 127) #sends MIDI note 1
+    elif a is False and lastA is True:
+        display.clear()
+    if b is True and lastB is False: #when button b is pressed, sends MIDI note 2 to PD
+        display.show("-1") #shows user that they have cycled down through one effect via the LED display
+        midiNoteOn(0, BUTTON_B_NOTE, 127) #sends MIDI note 2
+    elif b is False and lastB is True:
+        display.clear()
+    if c is True and lastC is False: #when pin 1 is touched via the button on the device, sends MIDI note 3 to PD
+        display.show("BYPASS") #informs user that the effect bypass control has been triggered via the LED display
+        midiNoteOn(0, BUTTON_C_NOTE, 127) #sends MIDI note 3
+    elif c is False and lastC is True:
+        display.clear()
+    if d is True and lastD is False: #when pin 2 is touched via the button on the device, sends MIDI note 4 to PD
+        display.show("LOCK") #informs user that the control bypass has been triggered via the LED display
+        midiNoteOn(0, BUTTON_D_NOTE, 127) #sends MIDI note 4
+    elif d is False and lastD is True:
+        display.clear()
+    lastA = a
+    lastB = b
+    lastC = c
+    lastD = d
+    current_tilt = accelerometer.get_y() #find tilt of device in the y axis
+    if current_tilt != last_tilt:
+        mod_y = math.floor(math.fabs((((current_tilt + 1024) / 2048) * 127)))
+        midiControlChange(0, 22, mod_y) #Value for the y axis is sent on MIDI control value 22
+        last_tilt = current_tilt
+    current_tilt = accelerometer.get_x() #find tilt of device in x axis
+    if current_tilt != last_tilt:
+        mod_x = math.floor(math.fabs((((current_tilt + 1024) / 2048) * 127)))
+        midiControlChange(0, 23, mod_x) #Value for the x axis is sent on MIDI control value 23
+        last_tilt = current_tilt
+        #Gesture comands taken from Lab 2 script and embelished
+    gesture = accelerometer.current_gesture()
+    if gesture == "face up":
+        display.show(Image.DIAMOND_SMALL)
+    if gesture == "face down":
+        display.show(Image.SAD) #Sad face indicates device is upside down and should not be used this way
+        #Display arrows to user to indicate which direction the effects are being altered
+    elif gesture == "up":
+        display.show(Image.ARROW_S) 
+    elif gesture == "down":
+        display.show(Image.ARROW_N)
+    elif gesture == "left":
+        display.show(Image.ARROW_W)
+    elif gesture == "right":
+        display.show(Image.ARROW_E)
+    elif gesture == "shake":
+        display.show(Image.ANGRY)
+    else:
+        display.show(Image.GHOST) #default display to show that device is switched on
+    sleep(10)
